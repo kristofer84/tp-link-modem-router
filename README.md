@@ -1,8 +1,8 @@
 # Goodies for Archer LTE routers
 
 > **This is a fork.** Upstream [plewin/tp-link-modem-router](https://github.com/plewin/tp-link-modem-router)
-> has had no commits since November 2021. This fork carries small fixes on the
-> `patches` branch; see [Fork changes](#fork-changes) below.
+> has had no commits since November 2021. This fork carries small fixes on
+> `master`; see [Fork changes](#fork-changes) below.
 
 ## Features
 
