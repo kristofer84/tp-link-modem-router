@@ -1,11 +1,15 @@
-version: "2.2"
 services:
   tp-link-api-bridge:
-    build: .
+    # Published by this repository's own workflow. Swap for `build: .` to run
+    # your own working copy instead.
+    image: ghcr.io/kristofer84/tp-link-modem-router:latest
     container_name: tp-link-api-bridge
-    volumes:
-      - ./config.json:/home/node/tp-link-modem-router-master/config.json
-    ports: 
-      - "3000:3000"
     restart: unless-stopped
     init: true
+    # Configuration comes from the environment -- see .env.example. A
+    # config.json still works if you prefer it:
+    #   volumes:
+    #     - ./config.json:/app/config.json:ro
+    env_file: .env
+    ports:
+      - "3000:3000"

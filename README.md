@@ -39,7 +39,7 @@ yarn install
 ./sms-send.js --url="http://192.168.1.1" --login="admin" --password="myrouterpassword" "0612345678" "my text message"
 
 # returns 0 on success, 1 on error
-# pipe output to /dev/null if you do not want debug output
+# output is human-readable text; LOG_LEVEL=error quietens it, LOG_FORMAT=json makes it parseable
 
 # you can also hardcode the credentials in the file or in the default config file : config.json
 ./sms-send.js 0612345678 "my text message"
