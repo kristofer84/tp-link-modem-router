@@ -43,6 +43,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // support encoded bodies
 app.use(nocache());
 app.set('router_client', client);
+app.set('config', config);
 app.disable('x-powered-by');
 
 import smsRoutes from './src/controllers/sms.mjs';

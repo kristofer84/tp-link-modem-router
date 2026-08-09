@@ -6,6 +6,7 @@ import RouterClient from './src/routerClient.mjs'
 import { TP_ACT, TP_CONTROLLERS } from './src/routerProtocol.mjs'
 import logger, { configureLogger } from './src/logger.mjs'
 import { loadConfig } from './src/config.mjs'
+import { PAYLOAD_GET_SEND_RESULT, SEND_STATUS, interpretSendResult } from './src/sendResult.mjs'
 
 // human-readable output by default; LOG_FORMAT=json overrides for scripted use
 configureLogger({ format: 'text' })
@@ -86,14 +87,6 @@ const payloadSendSms = {
   }
 }
 
-const payloadGetSendSmsResult = {
-  method: TP_ACT.ACT_GET,
-  controller: TP_CONTROLLERS.LTE_SMS_SENDNEWMSG,
-  attrs: [
-    'sendResult'
-  ]
-}
-
 let exitCode = 0;
 
 try {
@@ -101,7 +94,7 @@ try {
 
   verifySubmission(await client.execute(payloadSendSms));
 
-  exitCode = reportSendResult(await client.execute(payloadGetSendSmsResult));
+  exitCode = reportSendResult(await client.execute(PAYLOAD_GET_SEND_RESULT));
 } catch (error) {
   logger.error(`SMS could not be sent: ${error.message}`);
   logger.debug('Failure details', { stack: error.stack });
@@ -131,19 +124,18 @@ function verifySubmission(result) {
  * @returns {number} process exit code
  */
 function reportSendResult(result) {
-  const sendResult = result.error === 0 ? result.data[0]['sendResult'] : null;
+  const outcome = interpretSendResult(result);
 
-  if (sendResult === 1) {
+  if (outcome.status === SEND_STATUS.SENT) {
     logger.info('SMS sent successfully');
     return 0;
   }
 
-  if (sendResult === 3) {
-    //TODO sendResult=3 means queued or processing ??
+  if (outcome.status === SEND_STATUS.QUEUED) {
     logger.warn('SMS sending was accepted but not yet processed');
     return 0;
   }
 
-  logger.error('SMS could not be sent by router', { error: result.error, sendResult });
+  logger.error('SMS could not be sent by router', { error: result.error, sendResult: outcome.sendResult });
   return 1;
 }

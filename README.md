@@ -223,6 +223,7 @@ image itself carries no credentials:
 | `API_LISTEN_PORT` | api-bridge | `3000` |
 | `API_CLIENT_URL` / `_LOGIN` / `_PASSWORD` / `_POLLING_DELAY` | sms-cat | polling delay `5000` |
 | `SMS_GATEWAY_URL` / `_LOGIN` / `_PASSWORD` / `_DOMAIN` / `_LISTEN_HOST` / `_LISTEN_PORT` | smtp-gateway | `0.0.0.0`, `1025` |
+| `SMS_VERIFY_TIMEOUT_MS` / `SMS_VERIFY_INTERVAL_MS` | api-bridge | `5000` / `500` |
 | `LOG_FORMAT` / `LOG_LEVEL` | all | `json` (`text` for the CLI) / `info` |
 
 A `config.json` still works and can be mounted at `/app/config.json`; the
@@ -233,6 +234,37 @@ leaves a required key unset. Missing configuration is reported by name:
 Missing required configuration: url (ROUTER_URL), login (ROUTER_LOGIN). Set the
 environment variables, or provide them in ./config.json.
 ```
+
+## Verifying that an SMS was sent
+
+`POST /api/v1/sms/outbox` returns as soon as the router accepts the submission,
+so a `200` means *accepted*, not *sent* — a modem with no signal answers `200`
+just the same. Pass `verify=true` to have the bridge read the router's
+`sendResult` back before replying:
+
+```bash
+curl --user apiuser:pleasechangeme \
+  -d '{"to":"0123456789","content":"test"}' -H 'Content-Type: application/json' \
+  -X POST "http://127.0.0.1:3000/api/v1/sms/outbox?verify=true"
+```
+
+| Response | Meaning |
+|---|---|
+| `200` + `sendResult: 1` | the modem handed the message to the network |
+| `202` + `sendResult: 3` | still queued at the router when the timeout expired |
+| `502` | the router reported the message could not be sent |
+| `500` | the request to the router itself failed |
+
+**What this does not tell you.** The protocol carries no delivery receipt, so a
+verified send means the modem transmitted, not that a handset received. It does
+not validate the destination either: sending to `+999999999999999` returns
+`sendResult: 1`, because rejection happens out in the network, not at the modem.
+What verification does catch is the modem-side failures — no signal, SIM not
+registered, a full outbox — which the default path reports as success.
+
+Verification is opt-in for two reasons: it holds the request open for up to
+`SMS_VERIFY_TIMEOUT_MS`, and `sendResult` is a single global value describing the
+most recent send, so verified sends must not be issued concurrently.
 
 ## Fork changes
 

@@ -147,8 +147,33 @@
  *                $ref: '#/components/schemas/OutboxSms'
  *    post:
  *      summary: Send new SMS
- *      description: Submit new SMS for the router to send. Accepting json object or form-urlencoded.
+ *      description:
+ *        Submit new SMS for the router to send. Accepting json object or form-urlencoded.
+ *
+ *        By default this returns as soon as the router accepts the submission, so a 200 means
+ *        "accepted", not "sent" - a modem with no signal returns 200 just the same. Pass
+ *        verify=true to have the bridge read the router's sendResult back before answering.
+ *
+ *        Note that even a verified send only means the modem handed the message to the network.
+ *        The router protocol carries no delivery receipt, so nothing here can confirm that a
+ *        handset received it. Note also that sendResult is a single global value describing the
+ *        most recent send, so verified sends should not be issued concurrently.
  *      tags: [SMS]
+ *      parameters:
+ *        - in: query
+ *          name: verify
+ *          schema:
+ *             type: boolean
+ *          required: false
+ *          description: Read the router's sendResult back before responding. Adds up to
+ *            SMS_VERIFY_TIMEOUT_MS (default 5000ms) to the request.
+ *      responses:
+ *        "200":
+ *          description: Accepted by the router; with verify=true, confirmed sent (sendResult=1)
+ *        "202":
+ *          description: verify=true only - still queued at the router when the timeout expired (sendResult=3)
+ *        "502":
+ *          description: verify=true only - the router reported the message could not be sent
  *      consumes:
  *       - "application/json"
  *       - "application/x-www-form-urlencoded"
@@ -179,6 +204,7 @@
 
 import express from 'express';
 import { TP_ACT, TP_CONTROLLERS } from '../routerProtocol.mjs'
+import { pollSendResult, SEND_STATUS } from '../sendResult.mjs'
 
 const router = express.Router();
 
@@ -295,6 +321,8 @@ router.post('/outbox', async function (req, res) {
   const to = req.body.to;
   const content = req.body.content;
   const client = req.app.get('router_client');
+  const config = req.app.get('config') || {};
+  const verify = ['true', '1'].includes(String(req.query.verify).toLowerCase());
 
   const payloadSendSms = {
     method: TP_ACT.ACT_SET,
@@ -306,13 +334,47 @@ router.post('/outbox', async function (req, res) {
     }
   };
 
-  client.execute(payloadSendSms)
-    .then((response) => {
+  try {
+    const response = await client.execute(payloadSendSms);
+
+    // Default is unchanged and deliberately fire-and-forget: 200 means the
+    // router accepted the submission, nothing more. Verification costs a poll
+    // that holds the request open, so callers opt in.
+    if (!verify) {
       res.json({status: 200, data: response.data});
-    })
-    .catch((exception) => {
-      res.status(500).json({status: 500, exception: {name: exception.name, message: exception.message}});
+      return;
+    }
+
+    const outcome = await pollSendResult(client, {
+      timeoutMs: config.sms_verify_timeout_ms,
+      intervalMs: config.sms_verify_interval_ms,
     });
+
+    if (outcome.status === SEND_STATUS.SENT) {
+      res.json({status: 200, sendResult: outcome.sendResult, data: response.data});
+      return;
+    }
+
+    if (outcome.status === SEND_STATUS.QUEUED) {
+      // still processing when we ran out of patience, which is not a failure
+      res.status(202).json({
+        status: 202,
+        sendResult: outcome.sendResult,
+        message: 'Router accepted the message and is still processing it',
+        data: response.data,
+      });
+      return;
+    }
+
+    res.status(502).json({
+      status: 502,
+      sendResult: outcome.sendResult,
+      message: 'Router reported that the message could not be sent',
+      data: response.data,
+    });
+  } catch (exception) {
+    res.status(500).json({status: 500, exception: {name: exception.name, message: exception.message}});
+  }
 });
 
 router.delete('/outbox/:smsOrderNumber(\\d+)', async function (req, res) {

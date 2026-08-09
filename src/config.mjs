@@ -30,6 +30,8 @@ const STRING_KEYS = {
 
 const NUMBER_KEYS = {
   API_LISTEN_PORT: 'api_listen_port',
+  SMS_VERIFY_TIMEOUT_MS: 'sms_verify_timeout_ms',
+  SMS_VERIFY_INTERVAL_MS: 'sms_verify_interval_ms',
   API_CLIENT_POLLING_DELAY: 'api_client_polling_delay',
   SMS_GATEWAY_LISTEN_PORT: 'sms_gateway_listen_port',
 }
@@ -39,6 +41,9 @@ const NUMBER_KEYS = {
 const DEFAULTS = {
   api_listen_host: '0.0.0.0',
   api_listen_port: 3000,
+  // how long POST /sms/outbox?verify=true waits for the router to settle
+  sms_verify_timeout_ms: 5000,
+  sms_verify_interval_ms: 500,
   api_client_polling_delay: 5000,
   sms_gateway_listen_host: '0.0.0.0',
   sms_gateway_listen_port: 1025,
