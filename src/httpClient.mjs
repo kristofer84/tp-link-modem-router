@@ -1,6 +1,6 @@
 
 import axiosBase from 'axios';
-import axiosRetry from 'axios-retry';
+import axiosRetry, { isRetryableError } from 'axios-retry';
 
 const axios = axiosBase.create();
 
@@ -18,6 +18,5 @@ axiosRetry(axios, {
 });
 
 const httpClient = axios;
-const isRetryableError = axiosRetry.isRetryableError;
 
 export { httpClient, isRetryableError }

@@ -86,120 +86,119 @@
 
 /**
  * @swagger
- * path:
- *  /sms/inbox:
- *    get:
- *      summary: Get Received SMS (last 8 max received SMS)
- *      description:
- *        Returns a list of the last 8 received SMS, optionally filtered by unread status, sorted by most recent first.
- *        Only the last 8 elements are reported because the bridge does not support pagination at the router's end.
+ * /sms/inbox:
+ *   get:
+ *     summary: Get Received SMS (last 8 max received SMS)
+ *     description:
+ *       Returns a list of the last 8 received SMS, optionally filtered by unread status, sorted by most recent first.
+ *       Only the last 8 elements are reported because the bridge does not support pagination at the router's end.
  *
- *        Messages could be missed if this endpoint is polled and more than 8 messages are received. To poll messages
- *        from this endpoint without missing any, one should poll with filter unread=true and mark already read SMS using a PATCH request.
+ *       Messages could be missed if this endpoint is polled and more than 8 messages are received. To poll messages
+ *       from this endpoint without missing any, one should poll with filter unread=true and mark already read SMS using a PATCH request.
  *
- *        Please note that the order of the results is important if other endpoints are to be called.
- *      tags: [SMS]
- *      parameters:
- *        - in: query
- *          name: unread
- *          schema:
- *             type: boolean
- *          required: false
- *          description: Filter on this unread value, true = only unread SMS, false = only read SMS. Due to protocol limitations, reported results for filter unread=false are inaccurate. Filter unread=true does not have this issue and reports correctly the last 8 unread SMS.
- *      responses:
- *        "200":
- *          description: List of inbox SMS
- *          content:
- *            application/json:
- *              schema:
- *                $ref: '#/components/schemas/InboxSms'
- *  /sms/inbox/{smsOrderNumber}:
- *    patch:
- *      summary: Mark SMS as read for the n-th SMS in the last 8 SMS
- *      description: Difficult endpoint to use because of the stateful nature of the protocol at router's end. This endpoint must be called only after an unfiltered call to GET /sms/inbox.
- *      tags: [SMS]
- *      parameters:
- *        - name: "smsOrderNumber"
- *          in: "path"
- *          description: SMS order number in the max 8 SMS returned from /sms/inbox. It is not the SMS id.". First is 1 not 0. Range is 1 to 8 included.
- *          required: true
- *          type: "integer"
- *    delete:
- *      summary: Delete the n-th SMS in the last 8 SMS
- *      description: Difficult endpoint to use because of the stateful nature of the protocol at router's end. This endpoint must be called only after an unfiltered call to GET /sms/inbox.
- *      tags: [SMS]
- *      parameters:
- *        - name: "smsOrderNumber"
- *          in: "path"
- *          description: SMS order number in the max 8 SMS returned from /sms/inbox. It is not the SMS id.". First is 1 not 0. Range is 1 to 8 included.
- *          required: true
- *          type: "integer"
- *  /sms/outbox:
- *    get:
- *      summary: Get Sent SMS (last 8 max sent SMS)
- *      tags: [SMS]
- *      responses:
- *        "200":
- *          description: List of sent SMS
- *          content:
- *            application/json:
- *              schema:
- *                $ref: '#/components/schemas/OutboxSms'
- *    post:
- *      summary: Send new SMS
- *      description:
- *        Submit new SMS for the router to send. Accepting json object or form-urlencoded.
+ *       Please note that the order of the results is important if other endpoints are to be called.
+ *     tags: [SMS]
+ *     parameters:
+ *       - in: query
+ *         name: unread
+ *         schema:
+ *            type: boolean
+ *         required: false
+ *         description: Filter on this unread value, true = only unread SMS, false = only read SMS. Due to protocol limitations, reported results for filter unread=false are inaccurate. Filter unread=true does not have this issue and reports correctly the last 8 unread SMS.
+ *     responses:
+ *       "200":
+ *         description: List of inbox SMS
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/InboxSms'
+ * /sms/inbox/{smsOrderNumber}:
+ *   patch:
+ *     summary: Mark SMS as read for the n-th SMS in the last 8 SMS
+ *     description: Difficult endpoint to use because of the stateful nature of the protocol at router's end. This endpoint must be called only after an unfiltered call to GET /sms/inbox.
+ *     tags: [SMS]
+ *     parameters:
+ *       - name: "smsOrderNumber"
+ *         in: "path"
+ *         description: SMS order number in the max 8 SMS returned from /sms/inbox. It is not the SMS id.". First is 1 not 0. Range is 1 to 8 included.
+ *         required: true
+ *         type: "integer"
+ *   delete:
+ *     summary: Delete the n-th SMS in the last 8 SMS
+ *     description: Difficult endpoint to use because of the stateful nature of the protocol at router's end. This endpoint must be called only after an unfiltered call to GET /sms/inbox.
+ *     tags: [SMS]
+ *     parameters:
+ *       - name: "smsOrderNumber"
+ *         in: "path"
+ *         description: SMS order number in the max 8 SMS returned from /sms/inbox. It is not the SMS id.". First is 1 not 0. Range is 1 to 8 included.
+ *         required: true
+ *         type: "integer"
+ * /sms/outbox:
+ *   get:
+ *     summary: Get Sent SMS (last 8 max sent SMS)
+ *     tags: [SMS]
+ *     responses:
+ *       "200":
+ *         description: List of sent SMS
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OutboxSms'
+ *   post:
+ *     summary: Send new SMS
+ *     description:
+ *       Submit new SMS for the router to send. Accepting json object or form-urlencoded.
  *
- *        By default this returns as soon as the router accepts the submission, so a 200 means
- *        "accepted", not "sent" - a modem with no signal returns 200 just the same. Pass
- *        verify=true to have the bridge read the router's sendResult back before answering.
+ *       By default this returns as soon as the router accepts the submission, so a 200 means
+ *       "accepted", not "sent" - a modem with no signal returns 200 just the same. Pass
+ *       verify=true to have the bridge read the router's sendResult back before answering.
  *
- *        Note that even a verified send only means the modem handed the message to the network.
- *        The router protocol carries no delivery receipt, so nothing here can confirm that a
- *        handset received it. Note also that sendResult is a single global value describing the
- *        most recent send, so verified sends should not be issued concurrently.
- *      tags: [SMS]
- *      parameters:
- *        - in: query
- *          name: verify
- *          schema:
- *             type: boolean
- *          required: false
- *          description: Read the router's sendResult back before responding. Adds up to
- *            SMS_VERIFY_TIMEOUT_MS (default 5000ms) to the request.
- *      responses:
- *        "200":
- *          description: Accepted by the router; with verify=true, confirmed sent (sendResult=1)
- *        "202":
- *          description: verify=true only - still queued at the router when the timeout expired (sendResult=3)
- *        "502":
- *          description: verify=true only - the router reported the message could not be sent
- *      consumes:
- *       - "application/json"
- *       - "application/x-www-form-urlencoded"
- *      produces:
- *       - "application/json"
- *      requestBody:
- *        description: "SMS object that needs to be sent"
- *        required: true
- *        content:
- *          application/json:
- *            schema:
- *              $ref: '#/components/schemas/OutboxNewSms'
- *          application/x-www-form-urlencoded:
- *            schema:
- *              $ref: '#/components/schemas/OutboxNewSms'
- *  /sms/outbox/{smsOrderNumber}:
- *    delete:
- *      summary: Delete the n-th SMS in the last 8 SMS
- *      description: Difficult endpoint to use because of the stateful nature of the protocol at router's end. This endpoint must be called only after a call to GET /sms/outbox.
- *      tags: [SMS]
- *      parameters:
- *        - name: "smsOrderNumber"
- *          in: "path"
- *          description: SMS order number in the max 8 SMS returned from /sms/outbox. It is not the SMS id.". First is 1 not 0. Range is 1 to 8 included.
- *          required: true
- *          type: "integer"
+ *       Note that even a verified send only means the modem handed the message to the network.
+ *       The router protocol carries no delivery receipt, so nothing here can confirm that a
+ *       handset received it. Note also that sendResult is a single global value describing the
+ *       most recent send, so verified sends should not be issued concurrently.
+ *     tags: [SMS]
+ *     parameters:
+ *       - in: query
+ *         name: verify
+ *         schema:
+ *            type: boolean
+ *         required: false
+ *         description: Read the router's sendResult back before responding. Adds up to
+ *           SMS_VERIFY_TIMEOUT_MS (default 5000ms) to the request.
+ *     responses:
+ *       "200":
+ *         description: Accepted by the router; with verify=true, confirmed sent (sendResult=1)
+ *       "202":
+ *         description: verify=true only - still queued at the router when the timeout expired (sendResult=3)
+ *       "502":
+ *         description: verify=true only - the router reported the message could not be sent
+ *     consumes:
+ *      - "application/json"
+ *      - "application/x-www-form-urlencoded"
+ *     produces:
+ *      - "application/json"
+ *     requestBody:
+ *       description: "SMS object that needs to be sent"
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/OutboxNewSms'
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             $ref: '#/components/schemas/OutboxNewSms'
+ * /sms/outbox/{smsOrderNumber}:
+ *   delete:
+ *     summary: Delete the n-th SMS in the last 8 SMS
+ *     description: Difficult endpoint to use because of the stateful nature of the protocol at router's end. This endpoint must be called only after a call to GET /sms/outbox.
+ *     tags: [SMS]
+ *     parameters:
+ *       - name: "smsOrderNumber"
+ *         in: "path"
+ *         description: SMS order number in the max 8 SMS returned from /sms/outbox. It is not the SMS id.". First is 1 not 0. Range is 1 to 8 included.
+ *         required: true
+ *         type: "integer"
  */
 
 import express from 'express';

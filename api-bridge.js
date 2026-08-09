@@ -58,7 +58,9 @@ app.use('/api/v1/sms', authentication, smsRoutes);
 app.use('/api/v1/monitoring', authentication, monitoringRoutes);
 
 const options = {
-  swaggerDefinition: {
+  // renamed from swaggerDefinition in swagger-jsdoc v5; the old key is
+  // silently ignored, which yields an empty spec rather than an error
+  definition: {
     openapi: "3.0.0",
     info: {
       title: "Archer MR600 bridge API",

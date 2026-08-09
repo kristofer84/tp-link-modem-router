@@ -1,0 +1,28 @@
+version: 2
+
+# Upstream's dependency set had gone four years without a refresh -- 93 advisories
+# by the time this fork picked it up. Grouped so routine patches arrive as one PR
+# rather than six, since every push is built by the publish workflow and a bad
+# bump shows up as a red build before it can reach anything.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # express 5 drops inline regex route params, which
+      # src/controllers/sms.mjs relies on for :smsOrderNumber(\d+)
+      - dependency-name: express
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

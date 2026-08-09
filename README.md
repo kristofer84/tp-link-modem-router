@@ -270,6 +270,29 @@ most recent send, so verified sends must not be issued concurrently.
 
 Changes carried in this fork, relative to upstream `master` (`108b7f3`):
 
+### Dependencies refreshed
+
+Upstream's dependency set had not been touched since 2021 and carried 93
+advisories (3 critical, 38 high). It is now current, and `yarn audit` reports
+none. Two changes were needed in code rather than the lockfile:
+
+- `axios-retry` v4 exports `isRetryableError` as a named export only, not as a
+  property of the default export.
+- `swagger-jsdoc` v6 no longer accepts the legacy `path:` wrapper in `@swagger`
+  blocks. v4 tolerated it; v6 silently collapsed all five endpoints into a
+  single bogus `path` entry instead of erroring. The blocks now declare their
+  routes at the root of the comment.
+
+`express` is deliberately held at 4.x: v5 removes inline regex route params, and
+`src/controllers/sms.mjs` routes on `:smsOrderNumber(\d+)`. Dependabot is
+configured to ignore that major, and to group routine updates so they arrive as
+one PR that the publish workflow builds.
+
+The six stale dependabot branches inherited from upstream were deleted rather
+than merged: between them they addressed about six advisories, none of them the
+24 in `axios` or the 11 in `nodemailer`, and three bumped to versions that have
+since had their own.
+
 ### The Dockerfile now builds this repository
 
 Upstream's `Dockerfile` `curl`s `master.zip` from GitHub rather than using the
