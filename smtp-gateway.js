@@ -5,7 +5,10 @@ import smtpServerLib from 'smtp-server';
 import mailparser from 'mailparser';
 import axiosBase from 'axios';
 import axiosRetry from 'axios-retry';
-import logger from './src/logger.mjs'
+import logger, { configureLogger } from './src/logger.mjs'
+
+// machine-readable output: this runs as a service
+configureLogger({ format: 'json' })
 
 const axios = axiosBase.create();
 
@@ -36,7 +39,7 @@ try {
   let rawConfig = fs.readFileSync(configFilePath);
   config = JSON.parse(rawConfig);
 } catch(exception) {
-  console.error('config file ' + configFilePath + ' could not be read');
+  logger.error(`Config file ${configFilePath} could not be read, exiting`);
   process.exit(1);
 }
 
@@ -53,7 +56,8 @@ function sendSms(to, content) {
   params.append('to', to);
   params.append('content', content);
 
-  logger.info('Sending SMS', params);
+  // URLSearchParams serialises to `{}`, so log the values we actually have
+  logger.info('Sending SMS', {to, content});
 
   return axios.post(config.sms_gateway_url + "/api/v1/sms/outbox", params, axiosConfig);
 }

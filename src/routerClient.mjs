@@ -45,7 +45,7 @@ class RouterClient {
       .then(_ => this.fetchTokenId())
       // extract and store token header
       .then(response => this.extractTokenIdFromResponse(response))
-      .then(() => logger.info('api_bridge.connect.success'))
+      .then(() => logger.info('Connected to router'))
     ;
   }
 
@@ -87,7 +87,7 @@ class RouterClient {
     const nn = nnFound[1]; // public key
     const seq = seqFound[1]; // sequence included in authentication signature
 
-    logger.info("Received encryption params", {ee, nn, seq});
+    logger.debug("Received encryption params", {ee, nn, seq});
 
     return {ee, nn, seq};
   }
@@ -102,8 +102,9 @@ class RouterClient {
     this.encryption.setRSAKey(encryptionSettings.nn, encryptionSettings.ee);
     this.encryption.genAESKey();
 
-    // printing these generated values so we can decrypt response manually for debugging
-    logger.info("Generated AES: ", {aes: this.encryption.getAESKeyString()});
+    // printing these generated values so we can decrypt response manually for
+    // debugging -- keyed material, so debug level only
+    logger.debug("Generated AES", {aes: this.encryption.getAESKeyString()});
   }
 
   /**
@@ -112,7 +113,8 @@ class RouterClient {
   authenticate() {
     // generate auth payload
     const auth = this.encryption.AESEncrypt(this.login + '\n' + this.password, true); // true = encrypt as login
-    logger.info("Sending authentication payload", auth);
+    // contains the signed, encrypted credentials
+    logger.debug("Sending authentication payload", auth);
 
     const loginUrl = this.url + '/cgi/login?data=' + encodeURIComponent(auth.data) + '&sign=' + auth.sign + '&Action=1&LoginStatus=0';
     return this.httpClient.post(loginUrl, null, {
@@ -133,7 +135,7 @@ class RouterClient {
     const setCookieHeader = response.headers['set-cookie'][0];
     const sessionIdRegex = /JSESSIONID=([a-f0-9]+)/;
     this.sessionId = setCookieHeader.match(sessionIdRegex)[1];
-    logger.info("Received session cookie", {sessionId: this.sessionId});
+    logger.debug("Received session cookie", {sessionId: this.sessionId});
   }
 
   /**
@@ -154,12 +156,12 @@ class RouterClient {
     // extract token id from response content
     const tokenIdRegex = /var token="([a-f0-9]+)"/;
     this.tokenId = response.data.match(tokenIdRegex)[1];
-    logger.info("Received token id:", {tokenId: this.tokenId});
+    logger.debug("Received token id", {tokenId: this.tokenId});
   }
 
   // encrypt the frame
   encryptDataFrame(dataFrame) {
-    logger.debug('Encrypting: ', dataFrame);
+    logger.debug('Encrypting', {dataFrame});
     let stmp = this.encryption.AESEncrypt(dataFrame);
     return 'sign=' + stmp.sign + '\r\ndata=' + stmp.data + '\r\n';
   }

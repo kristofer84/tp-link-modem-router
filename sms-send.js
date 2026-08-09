@@ -5,6 +5,10 @@ import fs from 'fs'
 import minimist from 'minimist'
 import RouterClient from './src/routerClient.mjs'
 import { TP_ACT, TP_CONTROLLERS } from './src/routerProtocol.mjs'
+import logger, { configureLogger } from './src/logger.mjs'
+
+// human-readable output by default; LOG_FORMAT=json overrides for scripted use
+configureLogger({ format: 'text' })
 
 // change these values if you do not want to provide them as args
 // using the config.json file is recommended
@@ -18,10 +22,20 @@ const argv = minimist(process.argv.slice(2), {
 });
 
 if (argv['_'].length !== 2) {
-  console.error('This command requires 2 arguments, a number and a string text message');
-  console.error('Example: $self --url="http://192.168.1.1" --login=admin --password=myrouterpassword 0612345678 "my text message"');
-  console.error('Example: $self --config=/tmp/config.json 0612345678 "my text message"');
-  console.error('Example: $self 0612345678 "my text message"');
+  // usage is help text rather than a log event, so it is written plainly
+  process.stderr.write([
+    'This command requires 2 arguments, a number and a string text message',
+    '',
+    'Examples:',
+    '  $self --url="http://192.168.1.1" --login=admin --password=myrouterpassword 0612345678 "my text message"',
+    '  $self --config=/tmp/config.json 0612345678 "my text message"',
+    '  $self 0612345678 "my text message"',
+    '',
+    'Environment:',
+    '  LOG_FORMAT=text|json   output shape (default: text)',
+    '  LOG_LEVEL=info|debug   verbosity (default: info)',
+    '',
+  ].join('\n'));
   process.exit(1);
 }
 
@@ -36,7 +50,7 @@ try {
   routerUiLogin = config.login;
   routerUiPassword = config.password;
 } catch(exception) {
-  console.log('config file ' + configFilePath + ' could not be read, skipping')
+  logger.warn(`Config file ${configFilePath} could not be read, falling back to defaults and arguments`);
 }
 
 if (typeof argv['url'] !== 'undefined') {
@@ -54,13 +68,9 @@ if (typeof argv['password'] !== 'undefined') {
 const to = argv['_'][0];
 const textContent = argv['_'][1];
 
-console.log('args', {
-  routerUiUrl,
-  routerUiLogin,
-  routerUiPassword,
-  to,
-  textContent,
-});
+// the router password is deliberately absent here: it is never useful in a log
+// and this line used to print it in cleartext on every run
+logger.debug('Resolved configuration', { routerUiUrl, routerUiLogin, to });
 
 const client = new RouterClient(routerUiUrl, routerUiLogin, routerUiPassword);
 
@@ -82,35 +92,56 @@ const payloadGetSendSmsResult = {
   ]
 }
 
-client
-  .connect()
-  .then(_ => client.execute(payloadSendSms))
-  .then(verify_submission)
-  .then(_ => client.execute(payloadGetSendSmsResult))
-  .then(verify_submission_result)
-  .then(_ => client.disconnect())
-  .catch(function (error) {
-    // handle error, exit failure
-    console.log(error);
-    process.exit(1);
-  });
+let exitCode = 0;
 
-function verify_submission(result) {
-  if (result.error === 0) {
-    console.log("Great! SMS send operation was accepted.")
-  } else {
-    // hopefully we will never have this error
-    throw new Error('SMS send operation was not accepted');
+try {
+  await client.connect();
+
+  verifySubmission(await client.execute(payloadSendSms));
+
+  exitCode = reportSendResult(await client.execute(payloadGetSendSmsResult));
+} catch (error) {
+  logger.error(`SMS could not be sent: ${error.message}`);
+  logger.debug('Failure details', { stack: error.stack });
+  exitCode = 1;
+} finally {
+  // only meaningful if we got far enough to hold a session
+  if (client.isReady) {
+    await client.disconnect().catch(error => logger.debug(`Disconnect failed: ${error.message}`));
   }
 }
 
-function verify_submission_result(result) {
-  if (result.error === 0 && result.data[0]['sendResult'] === 1) {
-    console.log("Great! SMS sent successfully");
-  } else if (result.error === 0 && result.data[0]['sendResult'] === 3) {
-    //TODO sendResult=3 means queued or processing ??
-    console.log("Warning: SMS sending was accepted but not yet processed.");
-  } else {
-    console.log("Error: SMS could not be sent by router");
+process.exit(exitCode);
+
+function verifySubmission(result) {
+  if (result.error !== 0) {
+    // hopefully we will never have this error
+    throw new Error('SMS send operation was not accepted');
   }
+
+  logger.info('SMS send operation was accepted');
+}
+
+/**
+ * Report on the router's own view of the send, and map it to an exit code so
+ * that callers can react to a failure instead of parsing the output.
+ *
+ * @returns {number} process exit code
+ */
+function reportSendResult(result) {
+  const sendResult = result.error === 0 ? result.data[0]['sendResult'] : null;
+
+  if (sendResult === 1) {
+    logger.info('SMS sent successfully');
+    return 0;
+  }
+
+  if (sendResult === 3) {
+    //TODO sendResult=3 means queued or processing ??
+    logger.warn('SMS sending was accepted but not yet processed');
+    return 0;
+  }
+
+  logger.error('SMS could not be sent by router', { error: result.error, sendResult });
+  return 1;
 }

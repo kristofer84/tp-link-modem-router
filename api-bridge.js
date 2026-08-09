@@ -9,7 +9,10 @@ import swaggerUi from 'swagger-ui-express'
 import expressBasicAuth from 'express-basic-auth'
 
 import RouterClient from './src/routerClient.mjs'
-import logger from './src/logger.mjs'
+import logger, { configureLogger } from './src/logger.mjs'
+
+// machine-readable output: this runs as a service behind docker/systemd
+configureLogger({ format: 'json' })
 
 let configFilePath = './config.json';
 
@@ -26,7 +29,7 @@ try {
   const rawConfig = fs.readFileSync(configFilePath);
   config = JSON.parse(rawConfig);
 } catch(exception) {
-  logger.info('Config file ' + configFilePath + ' could not be read, exiting');
+  logger.error(`Config file ${configFilePath} could not be read, exiting`);
   process.exit(1);
 }
 

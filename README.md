@@ -1,5 +1,9 @@
 # Goodies for Archer LTE routers
 
+> **This is a fork.** Upstream [plewin/tp-link-modem-router](https://github.com/plewin/tp-link-modem-router)
+> has had no commits since November 2021. This fork carries small fixes on the
+> `patches` branch; see [Fork changes](#fork-changes) below.
+
 ## Features
 
 ### Implemented
@@ -196,3 +200,55 @@ I can offer no guarantees about the following projects
 * https://github.com/jonscheiding/tplink-vpn-ddns
 
 
+
+## Fork changes
+
+Changes carried in this fork, relative to upstream `master` (`108b7f3`):
+
+### Consistent log output
+
+Upstream mixed two output styles in a single stream: the CLIs printed plain text
+via `console.log` while the shared `RouterClient` they call logged JSON through
+winston, so running `sms-send.js` produced interleaved JSON objects and prose.
+
+`src/logger.mjs` now offers two formats, and each entry point picks one:
+
+| Entry point | Format | Rationale |
+|---|---|---|
+| `sms-send.js` | `text` | one-shot CLI, read by a human |
+| `api-bridge.js` | `json` | service, output collected by docker/systemd |
+| `sms-cat.js` | `json` | long-lived poller |
+| `smtp-gateway.js` | `json` | service |
+
+Two environment variables override the built-in defaults everywhere:
+
+* `LOG_FORMAT=text|json` — output shape
+* `LOG_LEVEL=error|warn|info|debug` — verbosity (default `info`)
+
+Colour is applied only when stdout is a terminal, warnings and errors go to
+stderr, and all remaining `console.*` calls were moved onto the logger. Usage
+text is the one deliberate exception: it is help output, not a log event, so it
+is still written plainly to stderr.
+
+### Secrets no longer logged at info level
+
+* `sms-send.js` printed the router password in cleartext on every run, in an
+  `args` dump. The password is gone from that line entirely.
+* `RouterClient` logged the generated AES key and IV, the signed authentication
+  payload, the session cookie and the token id at `info`. These are now `debug`,
+  so they stay available for manual decryption while debugging but no longer
+  land in service logs by default.
+
+### Fixed crash in the `sms-cat.js` error path
+
+`logger.notice(...)` was called on an abnormal HTTP response, but winston's
+default (npm) levels have no `notice` — the call threw a `TypeError` and killed
+the poller on the exact path meant to keep it running. It is now `logger.warn`.
+
+### Exit codes from `sms-send.js`
+
+Upstream exited `0` even when the router reported that the SMS could not be
+sent, which makes the script unusable in a pipeline or from a monitoring check.
+It now exits `1` on a failed send or an unexpected `sendResult`, and `0` on
+success or on a queued (`sendResult=3`) message. Disconnection now happens in a
+`finally` block, so a failed send still releases the router session.

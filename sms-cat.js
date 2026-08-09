@@ -5,7 +5,10 @@ import minimist from 'minimist'
 import axiosBase from 'axios';
 import axiosRetry from 'axios-retry';
 
-import logger from './src/logger.mjs'
+import logger, { configureLogger } from './src/logger.mjs'
+
+// machine-readable output: this runs as a long-lived poller
+configureLogger({ format: 'json' })
 
 const axios = axiosBase.create();
 
@@ -36,7 +39,7 @@ try {
   let rawConfig = fs.readFileSync(configFilePath);
   config = JSON.parse(rawConfig);
 } catch(exception) {
-  console.error('config file ' + configFilePath + ' could not be read');
+  logger.error(`Config file ${configFilePath} could not be read, exiting`);
   process.exit(1);
 }
 
@@ -80,7 +83,9 @@ class SmsPoller {
       await this.poll();
     } else if (response.status !== 200) {
       // An error - let's show it
-      logger.notice("Received abnormal response " + response.statusText);
+      // winston has no `notice` level, so the original call threw a TypeError
+      // here and killed the poller on the very path meant to keep it alive
+      logger.warn("Received abnormal response " + response.statusText);
       // Reconnect in one second
       await new Promise(resolve => setTimeout(resolve, 1000));
       await this.poll();
