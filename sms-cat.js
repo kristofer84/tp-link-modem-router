@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import fs from 'fs'
 import minimist from 'minimist'
 import axiosBase from 'axios';
 import axiosRetry from 'axios-retry';
 
 import logger, { configureLogger } from './src/logger.mjs'
+import { loadConfig } from './src/config.mjs'
 
 // machine-readable output: this runs as a long-lived poller
 configureLogger({ format: 'json' })
@@ -34,12 +34,15 @@ if (typeof argv['config'] !== 'undefined') {
   configFilePath = argv['config'];
 }
 
-let config ;
+let config;
+
 try {
-  let rawConfig = fs.readFileSync(configFilePath);
-  config = JSON.parse(rawConfig);
-} catch(exception) {
-  logger.error(`Config file ${configFilePath} could not be read, exiting`);
+  ({ config } = loadConfig({
+    path: configFilePath,
+    required: ['api_client_url', 'api_client_login', 'api_client_password', 'api_client_polling_delay'],
+  }));
+} catch (exception) {
+  logger.error(exception.message);
   process.exit(1);
 }
 

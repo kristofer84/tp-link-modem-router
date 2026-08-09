@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import fs from 'fs'
 import minimist from 'minimist'
 import express from 'express'
 import nocache from 'nocache'
@@ -9,6 +8,7 @@ import swaggerUi from 'swagger-ui-express'
 import expressBasicAuth from 'express-basic-auth'
 
 import RouterClient from './src/routerClient.mjs'
+import { loadConfig } from './src/config.mjs'
 import logger, { configureLogger } from './src/logger.mjs'
 
 // machine-readable output: this runs as a service behind docker/systemd
@@ -23,13 +23,15 @@ if (typeof argv['config'] !== 'undefined') {
 }
 
 
-let config = {};
+let config;
 
 try {
-  const rawConfig = fs.readFileSync(configFilePath);
-  config = JSON.parse(rawConfig);
-} catch(exception) {
-  logger.error(`Config file ${configFilePath} could not be read, exiting`);
+  ({ config } = loadConfig({
+    path: configFilePath,
+    required: ['url', 'login', 'password', 'api_users', 'api_listen_host', 'api_listen_port'],
+  }));
+} catch (exception) {
+  logger.error(exception.message);
   process.exit(1);
 }
 

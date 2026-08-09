@@ -1,0 +1,9 @@
+# Never let credentials reach an image layer, even when a real config.json or
+# .env is sitting in the build context during a local build.
+config.json
+.env
+
+.git
+.github
+node_modules
+*.md

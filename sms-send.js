@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // Send SMS via router
 
-import fs from 'fs'
 import minimist from 'minimist'
 import RouterClient from './src/routerClient.mjs'
 import { TP_ACT, TP_CONTROLLERS } from './src/routerProtocol.mjs'
 import logger, { configureLogger } from './src/logger.mjs'
+import { loadConfig } from './src/config.mjs'
 
 // human-readable output by default; LOG_FORMAT=json overrides for scripted use
 configureLogger({ format: 'text' })
 
-// change these values if you do not want to provide them as args
-// using the config.json file is recommended
+// last-resort fallbacks, overridden by config.json, then the environment,
+// then the command line arguments
 let routerUiUrl = 'http://192.168.1.1';
 let routerUiLogin = 'admin';
 let routerUiPassword = 'myrouterpassword';
@@ -32,8 +32,9 @@ if (argv['_'].length !== 2) {
     '  $self 0612345678 "my text message"',
     '',
     'Environment:',
-    '  LOG_FORMAT=text|json   output shape (default: text)',
-    '  LOG_LEVEL=info|debug   verbosity (default: info)',
+    '  ROUTER_URL, ROUTER_LOGIN, ROUTER_PASSWORD   router credentials',
+    '  LOG_FORMAT=text|json                        output shape (default: text)',
+    '  LOG_LEVEL=info|debug                        verbosity (default: info)',
     '',
   ].join('\n'));
   process.exit(1);
@@ -44,13 +45,14 @@ if (typeof argv['config'] !== 'undefined') {
 }
 
 try {
-  let rawConfig = fs.readFileSync(configFilePath);
-  let config = JSON.parse(rawConfig);
-  routerUiUrl = config.url;
-  routerUiLogin = config.login;
-  routerUiPassword = config.password;
-} catch(exception) {
-  logger.warn(`Config file ${configFilePath} could not be read, falling back to defaults and arguments`);
+  // file, then environment, then the command line arguments below
+  const { config } = loadConfig({ path: configFilePath });
+  routerUiUrl = config.url || routerUiUrl;
+  routerUiLogin = config.login || routerUiLogin;
+  routerUiPassword = config.password || routerUiPassword;
+} catch (exception) {
+  logger.error(exception.message);
+  process.exit(1);
 }
 
 if (typeof argv['url'] !== 'undefined') {

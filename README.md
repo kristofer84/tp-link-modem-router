@@ -201,9 +201,58 @@ I can offer no guarantees about the following projects
 
 
 
+## Running the published image
+
+The fork publishes `ghcr.io/kristofer84/tp-link-modem-router` for `linux/arm64`
+on every push, so a host needs neither a clone nor a local build:
+
+```bash
+docker run --env-file ./.env -p 3000:3000 ghcr.io/kristofer84/tp-link-modem-router
+```
+
+Configuration comes from the environment, so nothing has to be mounted and the
+image itself carries no credentials:
+
+| Variable | Used by | Default |
+|---|---|---|
+| `ROUTER_URL` | all | `http://192.168.1.1` |
+| `ROUTER_LOGIN` | all | — |
+| `ROUTER_PASSWORD` | all | — |
+| `API_USERS` | api-bridge | — (`user:pass,user2:pass2`) |
+| `API_LISTEN_HOST` | api-bridge | `0.0.0.0` |
+| `API_LISTEN_PORT` | api-bridge | `3000` |
+| `API_CLIENT_URL` / `_LOGIN` / `_PASSWORD` / `_POLLING_DELAY` | sms-cat | polling delay `5000` |
+| `SMS_GATEWAY_URL` / `_LOGIN` / `_PASSWORD` / `_DOMAIN` / `_LISTEN_HOST` / `_LISTEN_PORT` | smtp-gateway | `0.0.0.0`, `1025` |
+| `LOG_FORMAT` / `LOG_LEVEL` | all | `json` (`text` for the CLI) / `info` |
+
+A `config.json` still works and can be mounted at `/app/config.json`; the
+environment takes precedence over it, and a missing file is only an error if it
+leaves a required key unset. Missing configuration is reported by name:
+
+```
+Missing required configuration: url (ROUTER_URL), login (ROUTER_LOGIN). Set the
+environment variables, or provide them in ./config.json.
+```
+
 ## Fork changes
 
 Changes carried in this fork, relative to upstream `master` (`108b7f3`):
+
+### The Dockerfile now builds this repository
+
+Upstream's `Dockerfile` `curl`s `master.zip` from GitHub rather than using the
+build context, so building the repo produced upstream's code and ignored every
+local change — in a fork, that means all of them. It now copies the context,
+installs production dependencies in a separate stage so a source-only change
+does not re-run `yarn install`, and runs as the `node` user. A `.dockerignore`
+keeps `config.json` and `.env` out of image layers even when they are present
+locally.
+
+### Configuration from the environment
+
+Added `src/config.mjs`: a JSON file overlaid with environment variables, shared
+by all four entry points. This is what makes a credential-free published image
+possible — see [Running the published image](#running-the-published-image).
 
 ### Consistent log output
 
