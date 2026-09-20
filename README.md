@@ -124,7 +124,14 @@ Notes on the values:
   indicator - **`rsrp`, `rsrq` and `sinr` are the numbers worth alerting on.**
 * `sinr` is `sinrRaw / 10`; the modem reports tenths of a dB.
 * `band` is derived from the downlink `earfcn` via 3GPP TS 36.101, not from the modem's own
-  `rfInfoBand`, which reports an undocumented value (e.g. `32378`).
+  `rfInfoBand`, which reports an undocumented value (e.g. `32378`) that does not decode as a
+  band number.
+* **`band` and `earfcn` describe the serving cell only.** When `carrierAggregation` is true
+  (i.e. `networkType` is `4G+ LTE`) the modem is using at least one secondary component
+  carrier, and **the firmware never names it**: the dedicated `LTE_BANDINFO` object returns
+  the same single `LTE_ActiveBand` / `LTE_ActiveChannel` pair already present in
+  `LTE_NET_STATUS`, and no other object exposes an SCC. Treat `band` as "the band the
+  router is camped on", not "the bands in use".
 * `connStat`, `srvStat` and `rfInfoRat` have no published mapping and are passed through
   under `raw` rather than guessed at. On a healthy link they read `4`, `2` and `3`.
 * Every field is `null` rather than `0` when the router does not supply it, so a dashboard

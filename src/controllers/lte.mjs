@@ -21,8 +21,9 @@
  *          rssi:             { type: integer, description: Received Signal Strength Indicator, dBm }
  *          sinr:             { type: number,  description: Signal to Interference plus Noise Ratio, dB }
  *          sinrRaw:          { type: integer, description: Raw modem SINR value, tenths of a dB }
- *          earfcn:           { type: integer, description: E-UTRA Absolute Radio Frequency Channel Number }
- *          band:             { type: string,  description: LTE band derived from the EARFCN, null when unknown }
+ *          earfcn:           { type: integer, description: Downlink EARFCN of the SERVING cell only }
+ *          band:             { type: string,  description: Band of the SERVING cell, derived from the EARFCN; null when unknown }
+ *          carrierAggregation: { type: boolean, description: True when the modem reports 4G+, i.e. at least one secondary carrier the firmware does not name }
  *          operator:         { type: string,  description: Network operator name }
  *          registered:       { type: boolean, description: Whether the modem is registered on a network }
  *          roaming:          { type: boolean, description: Whether the modem is roaming }
@@ -126,6 +127,11 @@ router.get('/status', async function (req, res) {
         sinrRaw,
         earfcn,
         band: bandFromEarfcn(earfcn),
+        // 4G+ means at least one secondary component carrier is in use. The
+        // router never says which: LTE_BANDINFO returns the same single
+        // LTE_ActiveBand/LTE_ActiveChannel pair as LTE_NET_STATUS, so `band`
+        // and `earfcn` above describe the serving carrier only.
+        carrierAggregation: netTypeCode === 7,
         operator: prof.ispName || prof.spn || null,
         registered: num(net.regStat) === 1,
         roaming: num(net.roamStat) === 1,
