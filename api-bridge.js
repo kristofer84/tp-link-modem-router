@@ -48,6 +48,7 @@ app.disable('x-powered-by');
 
 import smsRoutes from './src/controllers/sms.mjs';
 import monitoringRoutes from './src/controllers/monitoring.mjs';
+import lteRoutes from './src/controllers/lte.mjs';
 
 const authentication = expressBasicAuth({
   users: config.api_users,
@@ -56,6 +57,7 @@ const authentication = expressBasicAuth({
 
 app.use('/api/v1/sms', authentication, smsRoutes);
 app.use('/api/v1/monitoring', authentication, monitoringRoutes);
+app.use('/api/v1/lte', authentication, lteRoutes);
 
 const options = {
   // renamed from swaggerDefinition in swagger-jsdoc v5; the old key is

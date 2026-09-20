@@ -11,6 +11,7 @@
 * Easy to use script to send SMS
 * Easy to use script to receive SMS
 * REST API bridge for managing and sending SMS
+* REST endpoint exposing LTE signal quality and registration state
 * SMTP to SMS gateway
 
 ## Installation and requirements
@@ -87,7 +88,47 @@ curl --user apiuser:pleasechangeme -d to=0123456789 -d content=test1 -X POST "ht
 
 # Sending SMS application/json style
 curl --user apiuser:pleasechangeme -d '{"to":"0123456789", "content":"test2"}' -H 'Content-Type: application/json' -X POST "http://127.0.0.1:3000/api/v1/sms/outbox" -H  "accept: application/json"
+
+# LTE signal quality and registration state
+curl --user apiuser:pleasechangeme -X GET "http://127.0.0.1:3000/api/v1/lte/status" -H  "accept: application/json"
 ```
+
+### LTE status
+
+`GET /api/v1/lte/status` reports what the router's own web UI shows about the 4G side,
+plus the radio metrics it does not show:
+
+```json
+{
+  "status": 200,
+  "data": {
+    "networkType": "4G+ LTE", "networkTypeCode": 7,
+    "signalBars": 3, "signalPercent": 75,
+    "rsrp": -97, "rsrq": -11, "rssi": -69,
+    "sinr": 20.2, "sinrRaw": 202,
+    "earfcn": 1750, "band": "3",
+    "operator": "Telenor",
+    "registered": true, "roaming": false,
+    "wanLinkStatus": "Up", "unreadSms": 0,
+    "raw": { "connStat": 4, "regStat": 1, "srvStat": 2, "roamStat": 0,
+             "rfInfoRat": 3, "rfInfoBand": 32378, "rfInfoEcio": 0 }
+  }
+}
+```
+
+Notes on the values:
+
+* `networkType` decodes `netType` with the same table the stock web UI uses
+  (`networkType_str`), so `7` really is 4G+ (carrier aggregation), not a vendor typo.
+* `signalPercent` is `signalBars * 25`, which is how the web UI renders it. It is a coarse
+  indicator - **`rsrp`, `rsrq` and `sinr` are the numbers worth alerting on.**
+* `sinr` is `sinrRaw / 10`; the modem reports tenths of a dB.
+* `band` is derived from the downlink `earfcn` via 3GPP TS 36.101, not from the modem's own
+  `rfInfoBand`, which reports an undocumented value (e.g. `32378`).
+* `connStat`, `srvStat` and `rfInfoRat` have no published mapping and are passed through
+  under `raw` rather than guessed at. On a healthy link they read `4`, `2` and `3`.
+* Every field is `null` rather than `0` when the router does not supply it, so a dashboard
+  cannot show a confident wrong number.
 
 ### Receive SMS with SMS cat
 
