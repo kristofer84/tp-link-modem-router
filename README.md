@@ -123,15 +123,20 @@ Notes on the values:
 * `signalPercent` is `signalBars * 25`, which is how the web UI renders it. It is a coarse
   indicator - **`rsrp`, `rsrq` and `sinr` are the numbers worth alerting on.**
 * `sinr` is `sinrRaw / 10`; the modem reports tenths of a dB.
-* `band` is derived from the downlink `earfcn` via 3GPP TS 36.101, not from the modem's own
-  `rfInfoBand`, which reports an undocumented value (e.g. `32378`) that does not decode as a
-  band number.
-* **`band` and `earfcn` describe the serving cell only.** When `carrierAggregation` is true
-  (i.e. `networkType` is `4G+ LTE`) the modem is using at least one secondary component
-  carrier, and **the firmware never names it**: the dedicated `LTE_BANDINFO` object returns
-  the same single `LTE_ActiveBand` / `LTE_ActiveChannel` pair already present in
-  `LTE_NET_STATUS`, and no other object exposes an SCC. Treat `band` as "the band the
-  router is camped on", not "the bands in use".
+* **`rfInfoBand` packs two bands into one integer** and must be unpacked: the low byte is
+  the primary component carrier, the high byte the secondary one (`0` when not
+  aggregating). `32378` = `0x7E7A` = index `122` and `126` = **bands 3 and 7**. Left raw it
+  looks like noise, which is why it is easy to dismiss. The index table (`BAND_INFO`) is
+  taken verbatim from the stock UI's `bandInfoList` in `status.htm`, and encodes the radio
+  technology too: 40-48 are GSM/UMTS frequency labels, 80-91 WCDMA band numbers, 120-160
+  LTE band numbers.
+* So `band` is the primary carrier, `bandSecondary` the second one, `bands` the list and
+  `bandsLabel` a display string such as `"3 + 7"`. `carrierAggregation` comes from the high
+  byte actually being set, which is stronger than inferring it from `networkType`.
+* The EARFCN-derived band (TS 36.101) is kept only as a fallback for when `rfInfoBand` is
+  unset, and as a cross-check on the primary.
+* `earfcn` is the serving cell's downlink channel; the router does not publish the
+  secondary carrier's EARFCN, only its band.
 * `connStat`, `srvStat` and `rfInfoRat` have no published mapping and are passed through
   under `raw` rather than guessed at. On a healthy link they read `4`, `2` and `3`.
 * Every field is `null` rather than `0` when the router does not supply it, so a dashboard

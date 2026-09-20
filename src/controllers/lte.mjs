@@ -21,9 +21,12 @@
  *          rssi:             { type: integer, description: Received Signal Strength Indicator, dBm }
  *          sinr:             { type: number,  description: Signal to Interference plus Noise Ratio, dB }
  *          sinrRaw:          { type: integer, description: Raw modem SINR value, tenths of a dB }
- *          earfcn:           { type: integer, description: Downlink EARFCN of the SERVING cell only }
- *          band:             { type: string,  description: Band of the SERVING cell, derived from the EARFCN; null when unknown }
- *          carrierAggregation: { type: boolean, description: True when the modem reports 4G+, i.e. at least one secondary carrier the firmware does not name }
+ *          earfcn:           { type: integer, description: Downlink EARFCN of the serving cell }
+ *          band:             { type: string,  description: Primary component carrier band }
+ *          bandSecondary:    { type: string,  description: Secondary component carrier band when aggregating, else null }
+ *          bands:            { type: array,   items: { type: string }, description: All component carrier bands in use }
+ *          bandsLabel:       { type: string,  description: Human label for the aggregate, e.g. "3 + 7" }
+ *          carrierAggregation: { type: boolean, description: True when a secondary component carrier is in use }
  *          operator:         { type: string,  description: Network operator name }
  *          registered:       { type: boolean, description: Whether the modem is registered on a network }
  *          roaming:          { type: boolean, description: Whether the modem is roaming }
@@ -69,8 +72,40 @@ const NETWORK_TYPE = [
   'No Service', 'GSM', 'WCDMA', '4G LTE', 'TD-SCDMA', 'CDMA 1x', 'CDMA 1x Ev-Do', '4G+ LTE',
 ];
 
-// E-UTRA band by downlink EARFCN, 3GPP TS 36.101 table 5.7.3-1.
-// Only the bands plausible for this hardware are listed; anything else returns null.
+// Band index -> label, verbatim from the stock web UI (status.htm, `bandInfoList`).
+// The index encodes the radio technology too: 40-48 are GSM/UMTS frequency
+// labels, 80-91 WCDMA band numbers, 120-160 LTE band numbers, 200-205 letters.
+const BAND_INFO = {
+  40:'450MHz',41:'480MHz',42:'750MHz',43:'850MHz',44:'900MHz',45:'900MHz',46:'900MHz',
+  47:'1800MHz',48:'1900MHz',
+  80:'1',81:'2',82:'3',83:'4',84:'5',85:'6',86:'7',87:'8',88:'9',90:'11',91:'12',
+  120:'1',121:'2',122:'3',123:'4',124:'5',125:'6',126:'7',127:'8',128:'9',129:'10',
+  130:'11',131:'12',132:'13',133:'14',134:'17',135:'33',136:'34',137:'35',138:'36',
+  139:'37',140:'38',141:'39',142:'40',143:'18',144:'19',145:'20',146:'21',147:'24',
+  148:'25',149:'41',150:'42',151:'43',152:'23',153:'26',154:'32',155:'125',156:'126',
+  157:'127',158:'28',159:'29',160:'30',
+  200:'A',201:'B',202:'C',203:'D',204:'E',205:'F',
+};
+
+// rfInfoBand packs two band indexes into one integer: the low byte is the
+// primary component carrier, the high byte the secondary one (0 when not
+// aggregating). The stock UI does exactly this and renders "3,7"; without the
+// unpacking the raw value looks like meaningless noise (e.g. 32378 = 0x7E7A =
+// bands 3 and 7).
+function decodeBands(rfInfoBand) {
+  const empty = { primary: null, secondary: null, list: [], label: null };
+  if (rfInfoBand === null || rfInfoBand === -1) return empty;
+  const lo = rfInfoBand & 0xff;
+  const hi = (rfInfoBand >> 8) & 0xff;
+  if (!lo) return empty;
+  const primary = BAND_INFO[lo] ?? null;
+  const secondary = hi ? (BAND_INFO[hi] ?? null) : null;
+  const list = [primary, secondary].filter(band => band !== null);
+  return { primary, secondary, list, label: list.length ? list.join(' + ') : null };
+}
+
+// E-UTRA band by downlink EARFCN, 3GPP TS 36.101 table 5.7.3-1. Only used as a
+// fallback when rfInfoBand is unset, and as a cross-check on the primary.
 const EARFCN_BANDS = [
   [0, 599, '1'], [1200, 1949, '3'], [2750, 3449, '7'], [3450, 3799, '8'],
   [6150, 6449, '20'], [9210, 9659, '28'], [9770, 9869, '32'],
@@ -110,6 +145,7 @@ router.get('/status', async function (req, res) {
     const bars = num(net.sigLevel);
     const earfcn = num(net.rfInfoChannel);
     const sinrRaw = num(net.rfInfoSnr);
+    const bands = decodeBands(num(net.rfInfoBand));
 
     res.json({
       status: 200,
@@ -126,12 +162,13 @@ router.get('/status', async function (req, res) {
         sinr: sinrRaw !== null ? sinrRaw / 10 : null,
         sinrRaw,
         earfcn,
-        band: bandFromEarfcn(earfcn),
-        // 4G+ means at least one secondary component carrier is in use. The
-        // router never says which: LTE_BANDINFO returns the same single
-        // LTE_ActiveBand/LTE_ActiveChannel pair as LTE_NET_STATUS, so `band`
-        // and `earfcn` above describe the serving carrier only.
-        carrierAggregation: netTypeCode === 7,
+        band: bands.primary ?? bandFromEarfcn(earfcn),
+        bandSecondary: bands.secondary,
+        bands: bands.list,
+        bandsLabel: bands.label,
+        // Prefer the packed high byte over netType: it says whether a second
+        // carrier is actually up, rather than only that the cell advertises 4G+.
+        carrierAggregation: bands.secondary !== null || netTypeCode === 7,
         operator: prof.ispName || prof.spn || null,
         registered: num(net.regStat) === 1,
         roaming: num(net.roamStat) === 1,
