@@ -146,6 +146,16 @@ Notes on the values:
   `3` (prepared) and `5` (unlocked after authentication).
 * **`WAN_LTE_LINK_CFG` also contains the IMSI and the SMS service centre number.** They are
   deliberately not read out - only `ipv4` and `simStatus` are taken from that object.
+* **Data usage comes from `WAN_LTE_INTF_CFG`, which returns two entries** and only one
+  carries the counters (the other is all zeros here). The controller picks the entry with
+  the largest `totalStatistics` rather than a fixed index, so it survives a reordering.
+  Counters arrive as decimal strings like `"1744470418868.0020"` and are rounded to whole
+  bytes.
+* `dataUsedTotal` is lifetime, `dataUsedToday` is `dailyFlow`. `dataUsedPeriod`
+  (`curStatistics`) only advances when a payment day is configured on the modem; with
+  `enablePaymentDay` off it stays `0`, so lifetime is the only cumulative figure.
+* `rxSpeed` / `txSpeed` are the modem's own instantaneous throughput in **bytes per
+  second**.
 * Every field is `null` rather than `0` when the router does not supply it, so a dashboard
   cannot show a confident wrong number.
 

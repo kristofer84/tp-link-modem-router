@@ -36,6 +36,15 @@
  *          simStatus:        { type: string,  description: Decoded SIM state }
  *          simStatusCode:    { type: integer, description: Raw simStatus index }
  *          simReady:         { type: boolean, description: True when the SIM is usable (prepared or unlocked) }
+ *          dataUsedTotal:    { type: integer, description: Lifetime bytes over the LTE link }
+ *          dataUsedToday:    { type: integer, description: Bytes used so far today }
+ *          dataUsedPeriod:   { type: integer, description: Bytes used in the current billing period; 0 unless a payment day is configured }
+ *          rxSpeed:          { type: integer, description: Current downstream throughput, bytes/second }
+ *          txSpeed:          { type: integer, description: Current upstream throughput, bytes/second }
+ *          dataLimitEnabled: { type: boolean, description: Whether a data cap is configured on the modem }
+ *          dataLimit:        { type: integer, description: Configured cap in bytes, 0 when unset }
+ *          billingDay:       { type: integer, description: Day of month the usage counter rolls over }
+ *          billingNextDue:   { type: string,  description: ISO timestamp of the next rollover, null when not configured }
  *          raw:              { type: object,  description: Undecoded modem status fields }
  */
 
@@ -155,12 +164,23 @@ router.get('/status', async function (req, res) {
     // WAN_LTE_LINK_CFG also carries the SIM's IMSI and the SMS service centre
     // number; only the two non-identifying fields below are read out of it.
     const lteLink = await client.execute({ method: TP_ACT.ACT_GL, controller: 'WAN_LTE_LINK_CFG' });
+    const lteIntf = await client.execute({ method: TP_ACT.ACT_GL, controller: 'WAN_LTE_INTF_CFG' });
 
     const net = (netStatus.data || [])[0] || {};
     const prof = (profStat.data || [])[0] || {};
     const lteWan = (wanIntf.data || []).find(entry => entry.WANAccessType === 'LTE') || {};
     const link = (lteLink.data || [])[0] || {};
     const simCode = num(link.simStatus);
+
+    // WAN_LTE_INTF_CFG returns two entries and only one carries the counters;
+    // on this hardware the first is all zeros. Pick by largest lifetime total
+    // rather than by index, so it keeps working if the order changes.
+    const intf = (lteIntf.data || []).reduce(
+      (best, entry) => (num(entry.totalStatistics) ?? 0) > (num(best?.totalStatistics) ?? -1) ? entry : best,
+      null) || {};
+    // Counters arrive as decimal strings ("1744470418868.0020"); bytes are whole.
+    const bytes = value => { const n = num(value); return n === null ? null : Math.round(n); };
+    const nextDue = num(intf.nextDue);
 
     const netTypeCode = num(net.netType);
     const bars = num(net.sigLevel);
@@ -205,6 +225,17 @@ router.get('/status', async function (req, res) {
         simStatusCode: simCode,
         // 3 = prepared, 5 = unlocked after authentication; both are usable.
         simReady: simCode === 3 || simCode === 5,
+        dataUsedTotal: bytes(intf.totalStatistics),
+        dataUsedToday: bytes(intf.dailyFlow),
+        // Only counts when enablePaymentDay is set; otherwise the modem leaves
+        // it at 0 and dataUsedTotal is the only cumulative figure.
+        dataUsedPeriod: bytes(intf.curStatistics),
+        rxSpeed: bytes(intf.curRxSpeed),
+        txSpeed: bytes(intf.curTxSpeed),
+        dataLimitEnabled: num(intf.enableDataLimit) === 1,
+        dataLimit: bytes(intf.dataLimit),
+        billingDay: num(intf.paymentDay),
+        billingNextDue: nextDue ? new Date(nextDue * 1000).toISOString() : null,
         // connStat/srvStat/rfInfoRat have no published mapping, so they are
         // passed through rather than guessed at. While the link is healthy
         // they read connStat=4, srvStat=2, rfInfoRat=3.
