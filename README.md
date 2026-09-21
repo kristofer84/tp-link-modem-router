@@ -139,6 +139,13 @@ Notes on the values:
   secondary carrier's EARFCN, only its band.
 * `connStat`, `srvStat` and `rfInfoRat` have no published mapping and are passed through
   under `raw` rather than guessed at. On a healthy link they read `4`, `2` and `3`.
+* `publicIp` is the carrier-assigned IPv4 on `wwan0`, read from `WAN_LTE_LINK_CFG`. It
+  changes on every LTE re-registration, which is what a DynDNS updater exists to chase, so
+  having it as a value rather than a syslog grep is the point.
+* `simStatus` decodes with the stock UI's own `simStatusArray_str`; `simReady` is true for
+  `3` (prepared) and `5` (unlocked after authentication).
+* **`WAN_LTE_LINK_CFG` also contains the IMSI and the SMS service centre number.** They are
+  deliberately not read out - only `ipv4` and `simStatus` are taken from that object.
 * Every field is `null` rather than `0` when the router does not supply it, so a dashboard
   cannot show a confident wrong number.
 

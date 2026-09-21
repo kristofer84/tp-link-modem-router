@@ -32,6 +32,10 @@
  *          roaming:          { type: boolean, description: Whether the modem is roaming }
  *          wanLinkStatus:    { type: string,  description: physicalLinkStatus of the LTE WAN interface }
  *          unreadSms:        { type: integer, description: Number of unread SMS held by the modem }
+ *          publicIp:         { type: string,  description: Public IPv4 the carrier has assigned to the LTE WAN }
+ *          simStatus:        { type: string,  description: Decoded SIM state }
+ *          simStatusCode:    { type: integer, description: Raw simStatus index }
+ *          simReady:         { type: boolean, description: True when the SIM is usable (prepared or unlocked) }
  *          raw:              { type: object,  description: Undecoded modem status fields }
  */
 
@@ -104,6 +108,18 @@ function decodeBands(rfInfoBand) {
   return { primary, secondary, list, label: list.length ? list.join(' + ') : null };
 }
 
+// SIM state, verbatim from the stock UI's `simStatusArray_str` (locale/en_US/array.js).
+const SIM_STATUS = [
+  'No SIM card detected or SIM card error',  // 0
+  'No SIM card detected',                    // 1
+  'SIM card error',                          // 2
+  'SIM card prepared',                       // 3
+  'SIM locked',                              // 4
+  'SIM unlocked, authentication succeeded',  // 5
+  'PIN locked',                              // 6
+  'SIM card is locked permanently',          // 7
+];
+
 // E-UTRA band by downlink EARFCN, 3GPP TS 36.101 table 5.7.3-1. Only used as a
 // fallback when rfInfoBand is unset, and as a cross-check on the primary.
 const EARFCN_BANDS = [
@@ -136,10 +152,15 @@ router.get('/status', async function (req, res) {
     const netStatus = await client.execute({ method: TP_ACT.ACT_GL, controller: 'LTE_NET_STATUS' });
     const profStat = await client.execute({ method: TP_ACT.ACT_GL, controller: 'LTE_PROF_STAT' });
     const wanIntf = await client.execute({ method: TP_ACT.ACT_GL, controller: 'WAN_COMMON_INTF_CFG' });
+    // WAN_LTE_LINK_CFG also carries the SIM's IMSI and the SMS service centre
+    // number; only the two non-identifying fields below are read out of it.
+    const lteLink = await client.execute({ method: TP_ACT.ACT_GL, controller: 'WAN_LTE_LINK_CFG' });
 
     const net = (netStatus.data || [])[0] || {};
     const prof = (profStat.data || [])[0] || {};
     const lteWan = (wanIntf.data || []).find(entry => entry.WANAccessType === 'LTE') || {};
+    const link = (lteLink.data || [])[0] || {};
+    const simCode = num(link.simStatus);
 
     const netTypeCode = num(net.netType);
     const bars = num(net.sigLevel);
@@ -174,6 +195,13 @@ router.get('/status', async function (req, res) {
         roaming: num(net.roamStat) === 1,
         wanLinkStatus: lteWan.physicalLinkStatus ?? null,
         unreadSms: num(net.smsUnreadCount),
+        // The carrier-assigned address. It changes on every LTE
+        // re-registration, which is what the Loopia DynDNS updater chases.
+        publicIp: link.ipv4 || null,
+        simStatus: simCode !== null ? (SIM_STATUS[simCode] ?? 'Unknown') : null,
+        simStatusCode: simCode,
+        // 3 = prepared, 5 = unlocked after authentication; both are usable.
+        simReady: simCode === 3 || simCode === 5,
         // connStat/srvStat/rfInfoRat have no published mapping, so they are
         // passed through rather than guessed at. While the link is healthy
         // they read connStat=4, srvStat=2, rfInfoRat=3.
