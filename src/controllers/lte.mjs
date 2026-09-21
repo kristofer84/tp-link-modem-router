@@ -187,9 +187,12 @@ router.get('/status', async function (req, res) {
         bandSecondary: bands.secondary,
         bands: bands.list,
         bandsLabel: bands.label,
-        // Prefer the packed high byte over netType: it says whether a second
-        // carrier is actually up, rather than only that the cell advertises 4G+.
-        carrierAggregation: bands.secondary !== null || netTypeCode === 7,
+        // Strictly the packed high byte. netType stays 7 ("4G+ LTE") whenever the
+        // cell is LTE-A capable, even while only one carrier is actually up, so
+        // falling back to it would pin this true permanently and say nothing.
+        // Observed flipping in practice: rfInfoBand 32378 (bands 3+7) -> 126
+        // (band 7 alone) with netType 7 throughout.
+        carrierAggregation: bands.secondary !== null,
         operator: prof.ispName || prof.spn || null,
         registered: num(net.regStat) === 1,
         roaming: num(net.roamStat) === 1,
